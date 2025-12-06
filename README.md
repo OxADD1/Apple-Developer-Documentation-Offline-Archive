@@ -177,31 +177,45 @@ apple-docs-offline/
 │   ├── 01_discover_docs.py    # Recursive documentation crawler
 │   ├── 02_download_json.py    # JSON downloader with manifest
 │   ├── 03_json_to_markdown.py # JSON → Markdown converter
+│   ├── 04_markdown_to_pdf.py  # Generate PDFs from Markdown
+│   ├── 05_markdown_to_html.py # Generate browsable HTML site
 │   ├── update_check.py        # Check for updates (git fetch)
 │   ├── update_pull.py         # Download updates (git pull)
 │   ├── update_status.py       # Show status (git status)
 │   └── requirements.txt       # Python dependencies
+│
+├── markdown/                  # AI-optimized Markdown
+│   ├── swift/
+│   │   ├── Array.md
+│   │   ├── String.md
+│   │   └── ... (~30,000 files)
+│   ├── swiftui/
+│   │   ├── View.md
+│   │   └── ... (~5,000 files)
+│   └── ... (8 more frameworks)
+│
+├── pdf/                       # Human-readable PDFs
+│   ├── swift_documentation.pdf
+│   ├── swiftui_documentation.pdf
+│   └── ... (one per framework)
+│
+├── html/                      # Browsable HTML documentation
+│   ├── index.html
+│   ├── swift/
+│   │   ├── index.html
+│   │   └── ...
+│   └── ...
+│
+├── raw-json/                  # Original Apple JSON (backup)
+│   ├── swift/
+│   ├── swiftui/
+│   └── ...
 │
 ├── .docsync/                  # Update tracking metadata
 │   ├── manifest.json          # All pages with ETags/hashes
 │   ├── versions/              # Version snapshots
 │   ├── changelog/             # Update changelogs
 │   └── cache/                 # Update check cache
-│
-├── raw-json/                  # Original Apple JSON
-│   ├── swift/
-│   ├── swiftui/
-│   └── ...
-│
-├── markdown/                  # AI-optimized Markdown
-│   ├── swift/
-│   │   ├── array.md
-│   │   ├── string.md
-│   │   └── ...
-│   ├── swiftui/
-│   │   ├── view.md
-│   │   └── ...
-│   └── ...
 │
 ├── index.json                 # Discovery index
 ├── README.md                  # This file
@@ -345,9 +359,171 @@ All scripts support `--help`:
 python scripts/01_discover_docs.py --help
 python scripts/02_download_json.py --help
 python scripts/03_json_to_markdown.py --help
+python scripts/04_markdown_to_pdf.py --help
+python scripts/05_markdown_to_html.py --help
 python scripts/update_check.py --help
 python scripts/update_pull.py --help
 python scripts/update_status.py --help
+```
+
+## Complete Documentation Archive
+
+### Download All Frameworks (Overnight)
+
+To download the complete Apple Developer Documentation for all frameworks:
+
+```bash
+# Full download sequence (runs for 12-24 hours)
+python scripts/01_discover_docs.py
+python scripts/02_download_json.py
+python scripts/03_json_to_markdown.py
+```
+
+**Expected Results:**
+- **~68,500 pages** across all frameworks
+- **~3-5 GB** total storage
+- **12-24 hours** download time (due to rate limiting)
+
+**Run in background:**
+
+```bash
+# macOS/Linux - run overnight
+nohup bash -c '
+  python scripts/01_discover_docs.py && \
+  python scripts/02_download_json.py && \
+  python scripts/03_json_to_markdown.py
+' > download.log 2>&1 &
+
+# Keep Mac awake during download
+caffeinate -i -t 86400 &
+
+# Monitor progress
+tail -f download.log
+```
+
+### Generate PDF Documentation
+
+After downloading markdown files, generate searchable PDFs:
+
+```bash
+# Install pandoc (required for PDF generation)
+brew install pandoc basictex  # macOS
+# sudo apt-get install pandoc texlive-xetex  # Linux
+
+# Install Python dependency
+pip install markdown
+
+# Generate PDFs (one per framework, recommended sizes)
+python scripts/04_markdown_to_pdf.py --framework swift --max-files 500
+python scripts/04_markdown_to_pdf.py --framework swiftui --max-files 300
+python scripts/04_markdown_to_pdf.py --framework foundation --max-files 400
+```
+
+**PDF Features:**
+- ✅ Auto-generated table of contents
+- ✅ Syntax highlighting for code blocks
+- ✅ Numbered sections
+- ✅ Working hyperlinks
+- ✅ Professional layout (1-inch margins, 10pt font)
+
+**Output:** `pdf/<framework>_documentation.pdf` (~20-50 MB each)
+
+**Framework-Specific Recommendations:**
+
+| Framework | Recommended Files | Expected PDF Size | Coverage |
+|-----------|------------------|-------------------|----------|
+| swift | 500 | ~50 MB | Core language features |
+| swiftui | 300 | ~30 MB | Essential UI components |
+| uikit | 400 | ~40 MB | Major view controllers & views |
+| foundation | 400 | ~40 MB | Core data types & APIs |
+| coredata | 200 | ~20 MB | Full framework |
+| combine | 150 | ~15 MB | Full framework |
+| swiftdata | 100 | ~10 MB | Full framework |
+| coreml | 200 | ~20 MB | ML essentials |
+| mapkit | 150 | ~15 MB | Map & location APIs |
+| avfoundation | 250 | ~25 MB | A/V processing APIs |
+
+**Test with smaller subset first:**
+
+```bash
+# Generate a small test PDF (50 pages)
+python scripts/04_markdown_to_pdf.py --framework swift --max-files 50
+open pdf/swift_documentation.pdf
+```
+
+### Generate HTML Documentation
+
+Create a browsable, searchable static HTML website:
+
+```bash
+# Install dependency
+pip install markdown
+
+# Generate HTML for all frameworks
+python scripts/05_markdown_to_html.py
+
+# Or specific frameworks only
+python scripts/05_markdown_to_html.py --frameworks swift swiftui
+
+# Open in browser
+open html/index.html
+```
+
+**HTML Features:**
+- ✅ Complete offline browsing
+- ✅ Search functionality per framework
+- ✅ Apple-style dark code highlighting
+- ✅ Responsive design
+- ✅ Fast navigation
+- ✅ No server required
+
+**Output:** `html/` directory with complete static website
+
+### Complete Archive Structure
+
+After downloading all frameworks and generating documentation:
+
+```
+Apple-Developer-Documentation-Offline-Archive/
+├── markdown/                  # AI-optimized Markdown (for LLMs, RAG systems)
+│   ├── swift/                # ~30,000 files (~500 MB)
+│   ├── swiftui/              # ~5,000 files (~80 MB)
+│   ├── uikit/                # ~8,000 files (~130 MB)
+│   ├── foundation/           # ~12,000 files (~200 MB)
+│   └── ...                   # 6 more frameworks
+│
+├── pdf/                      # Human-readable PDFs
+│   ├── swift_documentation.pdf
+│   ├── swiftui_documentation.pdf
+│   ├── foundation_documentation.pdf
+│   └── ...
+│
+├── html/                     # Browsable HTML documentation
+│   ├── index.html
+│   ├── swift/
+│   │   ├── index.html
+│   │   └── ...
+│   └── ...
+│
+├── raw-json/                 # Original Apple JSON (backup)
+│   ├── swift/                # ~1.2 GB
+│   ├── swiftui/              # ~200 MB
+│   └── ...
+│
+├── .docsync/                 # Update tracking
+│   ├── manifest.json         # ETags & hashes
+│   ├── versions/             # Version snapshots
+│   └── changelog/            # Update history
+│
+└── scripts/                  # Python tools
+    ├── 01_discover_docs.py
+    ├── 02_download_json.py
+    ├── 03_json_to_markdown.py
+    ├── 04_markdown_to_pdf.py
+    ├── 05_markdown_to_html.py
+    ├── update_check.py
+    ├── update_pull.py
+    └── update_status.py
 ```
 
 ## How It Works
@@ -414,12 +590,13 @@ cat .docsync/changelog/*.md
 
 ## Future Features
 
-- [ ] PDF generation (`04_markdown_to_pdf.py`)
+- [x] PDF generation (`04_markdown_to_pdf.py`) ✅
+- [x] HTML documentation website (`05_markdown_to_html.py`) ✅
 - [ ] Update history viewer (`update_history.py`)
 - [ ] Version rollback (`update_rollback.py`)
-- [ ] Swift Book integration (`05_swift_book_download.sh`)
-- [ ] Full-text search index
-- [ ] Web UI for browsing
+- [ ] Swift Book integration
+- [ ] Full-text search index for HTML
+- [ ] Desktop app wrapper (Electron/Tauri)
 
 ## License & Disclaimer
 
