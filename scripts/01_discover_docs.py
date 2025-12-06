@@ -87,6 +87,36 @@ class DocumentationCrawler:
             self.url_metadata = state['url_metadata']
             print(f"Resumed: {len(self.processed_urls)} processed, {len(self.discovered_urls) - len(self.processed_urls)} remaining")
 
+    def normalize_identifier(self, identifier: str) -> str:
+        """Normalize Apple doc identifier to path format
+
+        Converts:
+        - doc://com.apple.foundation/documentation/Foundation/NSString -> foundation/NSString
+        - /documentation/swift/string -> swift/string
+        - swift/string -> swift/string
+        """
+        # Remove doc:// prefix if present
+        if identifier.startswith('doc://'):
+            # Format: doc://com.apple.FRAMEWORK/documentation/PATH
+            identifier = identifier.replace('doc://', '')
+            # Remove com.apple. prefix
+            if identifier.startswith('com.apple.'):
+                identifier = identifier.replace('com.apple.', '', 1)
+            # Extract path after /documentation/
+            if '/documentation/' in identifier:
+                parts = identifier.split('/documentation/', 1)
+                if len(parts) == 2:
+                    framework = parts[0].lower()
+                    path = parts[1]
+                    # Return framework/path (e.g., foundation/NSString)
+                    identifier = f"{framework}/{path}"
+
+        # Remove leading /documentation/ if present
+        if identifier.startswith('/documentation/'):
+            identifier = identifier.replace('/documentation/', '', 1)
+
+        return identifier
+
     def extract_references_from_json(self, data: dict, base_path: str) -> Set[str]:
         """Extract all documentation references from JSON data"""
         references = set()
@@ -95,7 +125,10 @@ class DocumentationCrawler:
         if 'topicSections' in data:
             for section in data['topicSections']:
                 if 'identifiers' in section:
-                    references.update(section['identifiers'])
+                    for identifier in section['identifiers']:
+                        normalized = self.normalize_identifier(identifier)
+                        if normalized:
+                            references.add(normalized)
 
         # Extract from references section
         if 'references' in data:
@@ -104,14 +137,18 @@ class DocumentationCrawler:
                     if 'url' in ref_data:
                         # Convert relative URL to full path
                         url = ref_data['url']
-                        if url.startswith('/documentation/'):
-                            references.add(url.replace('/documentation/', ''))
+                        normalized = self.normalize_identifier(url)
+                        if normalized:
+                            references.add(normalized)
 
         # Extract from relationships
         if 'relationshipsSections' in data:
             for section in data.get('relationshipsSections', []):
                 if 'identifiers' in section:
-                    references.update(section['identifiers'])
+                    for identifier in section['identifiers']:
+                        normalized = self.normalize_identifier(identifier)
+                        if normalized:
+                            references.add(normalized)
 
         return references
 
