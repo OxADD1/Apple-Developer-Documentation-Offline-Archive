@@ -1,0 +1,208 @@
+  name: Download Apple Documentation
+
+  on:
+    workflow_dispatch:
+      inputs:
+        frameworks:
+          description: 'Frameworks to download (comma-separated, or "all")'
+          required: true
+          default: 'swift,swiftui'
+          type: string
+        operation:
+          description: 'Operation to perform'
+          required: true
+          type: choice
+          options:
+            - 'discover'
+            - 'download'
+            - 'convert'
+            - 'full_pipeline'
+            - 'check_updates'
+            - 'pull_updates'
+        generate_pdf:
+          description: 'Generate PDF documentation'
+          required: false
+          type: boolean
+          default: false
+        generate_html:
+          description: 'Generate HTML documentation'
+          required: false
+          type: boolean
+          default: false
+
+  jobs:
+    process-documentation:
+      runs-on: ubuntu-latest
+      timeout-minutes: 720  # 12 hours max
+
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+
+        - name: Set up Python
+          uses: actions/setup-python@v5
+          with:
+            python-version: '3.11'
+            cache: 'pip'
+
+        - name: Install dependencies
+          run: |
+            python -m pip install --upgrade pip
+            pip install -r scripts/requirements.txt
+
+        - name: Install PDF dependencies
+          if: inputs.generate_pdf
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y pandoc texlive-xetex
+
+        - name: Restore previous state
+          uses: actions/cache@v4
+          with:
+            path: |
+              discovery_state.json
+              index.json
+              .docsync/
+              raw-json/
+              markdown/
+            key: docs-state-${{ github.run_id }}
+            restore-keys: |
+              docs-state-
+
+        - name: Parse frameworks
+          id: parse_frameworks
+          run: |
+            FRAMEWORKS="${{ inputs.frameworks }}"
+            if [ "$FRAMEWORKS" = "all" ]; then
+              echo "frameworks_args=" >> $GITHUB_OUTPUT
+            else
+              FRAMEWORKS_ARRAY=$(echo "$FRAMEWORKS" | tr ',' ' ')
+              echo "frameworks_args=--frameworks $FRAMEWORKS_ARRAY" >> $GITHUB_OUTPUT
+            fi
+
+        - name: Run Discovery
+          if: inputs.operation == 'discover' || inputs.operation == 'full_pipeline'
+          run: |
+            python scripts/01_discover_docs.py ${{ steps.parse_frameworks.outputs.frameworks_args }} --resume
+
+        - name: Run Download
+          if: inputs.operation == 'download' || inputs.operation == 'full_pipeline'
+          run: |
+            python scripts/02_download_json.py ${{ steps.parse_frameworks.outputs.frameworks_args }}
+
+        - name: Convert to Markdown
+          if: inputs.operation == 'convert' || inputs.operation == 'full_pipeline'
+          run: |
+            python scripts/03_json_to_markdown.py ${{ steps.parse_frameworks.outputs.frameworks_args }}
+
+        - name: Check Updates
+          if: inputs.operation == 'check_updates'
+          run: |
+            python scripts/update_check.py ${{ steps.parse_frameworks.outputs.frameworks_args }}
+
+        - name: Pull Updates
+          if: inputs.operation == 'pull_updates'
+          run: |
+            python scripts/update_pull.py ${{ steps.parse_frameworks.outputs.frameworks_args }}
+
+        - name: Generate PDF
+          if: inputs.generate_pdf && (inputs.operation == 'convert' || inputs.operation == 'full_pipeline')
+          run: |
+            FRAMEWORKS="${{ inputs.frameworks }}"
+            if [ "$FRAMEWORKS" != "all" ]; then
+              IFS=',' read -ra FW_ARRAY <<< "$FRAMEWORKS"
+              for fw in "${FW_ARRAY[@]}"; do
+                python scripts/04_markdown_to_pdf.py --framework "$fw" --max-files 500 || true
+              done
+            fi
+
+        - name: Generate HTML
+          if: inputs.generate_html && (inputs.operation == 'convert' || inputs.operation == 'full_pipeline')
+          run: |
+            python scripts/05_markdown_to_html.py ${{ steps.parse_frameworks.outputs.frameworks_args }}
+
+        - name: Generate statistics
+          run: |
+            echo "# Documentation Statistics" > stats.md
+            echo "" >> stats.md
+            echo "**Operation:** ${{ inputs.operation }}" >> stats.md
+            echo "**Frameworks:** ${{ inputs.frameworks }}" >> stats.md
+            echo "**Timestamp:** $(date -u)" >> stats.md
+            echo "" >> stats.md
+
+            if [ -f "index.json" ]; then
+              echo "## Discovery Stats" >> stats.md
+              python -c "import json; data=json.load(open('index.json')); print(f\"Total pages: {data.get('total_pages', 0)}\"); [print(f\"- {k}: 
+  {len(v)} pages\") for k,v in data.get('frameworks', {}).items()]" >> stats.md
+            fi
+
+            if [ -d "markdown" ]; then
+              echo "" >> stats.md
+              echo "## Markdown Files" >> stats.md
+              echo "Total: $(find markdown -name '*.md' | wc -l) files" >> stats.md
+            fi
+
+            cat stats.md
+
+        - name: Create archive
+          run: |
+            mkdir -p artifacts
+
+            # Archive markdown files
+            if [ -d "markdown" ]; then
+              tar -czf artifacts/markdown.tar.gz markdown/
+            fi
+
+            # Archive JSON files (sample)
+            if [ -d "raw-json" ]; then
+              find raw-json -name "*.json" | head -100 | tar -czf artifacts/json_sample.tar.gz -T -
+            fi
+
+            # Archive PDFs
+            if [ -d "pdf" ]; then
+              tar -czf artifacts/pdf.tar.gz pdf/
+            fi
+
+            # Archive HTML
+            if [ -d "html" ]; then
+              tar -czf artifacts/html.tar.gz html/
+            fi
+
+            # Copy metadata
+            cp -f discovery_state.json artifacts/ 2>/dev/null || true
+            cp -f index.json artifacts/ 2>/dev/null || true
+            cp -f stats.md artifacts/ 2>/dev/null || true
+            cp -rf .docsync artifacts/ 2>/dev/null || true
+
+        - name: Upload artifacts
+          uses: actions/upload-artifact@v4
+          with:
+            name: documentation-${{ inputs.frameworks }}-${{ github.run_id }}
+            path: artifacts/
+            retention-days: 30
+
+        - name: Create Release
+          if: inputs.operation == 'full_pipeline'
+          uses: softprops/action-gh-release@v1
+          with:
+            tag_name: docs-${{ github.run_number }}
+            name: Documentation Release ${{ github.run_number }}
+            body_path: artifacts/stats.md
+            files: artifacts/*.tar.gz
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Update cache
+          uses: actions/cache/save@v4
+          if: always()
+          with:
+            path: |
+              discovery_state.json
+              index.json
+              .docsync/
+              raw-json/
+              markdown/
+            key: docs-state-${{ github.run_id }}
+
