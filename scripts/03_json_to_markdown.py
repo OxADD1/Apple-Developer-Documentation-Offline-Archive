@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Any
 from tqdm import tqdm
 import argparse
-import re
+
 
 
 class AppleDocConverter:
@@ -134,7 +134,7 @@ class AppleDocConverter:
         result = []
 
         # Header
-        if header:
+        if header and isinstance(header, dict):
             cells = header.get('cells', [])
             header_row = ' | '.join([self.convert_inline_content(cell.get('content', [])) for cell in cells])
             result.append(f"| {header_row} |\n")
@@ -142,6 +142,8 @@ class AppleDocConverter:
 
         # Rows
         for row in rows:
+            if not isinstance(row, dict):
+                continue
             cells = row.get('cells', [])
             row_text = ' | '.join([self.convert_inline_content(cell.get('content', [])) for cell in cells])
             result.append(f"| {row_text} |\n")
