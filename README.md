@@ -11,6 +11,8 @@ Download and maintain a complete offline archive of Apple Developer Documentatio
 - **Smart Caching** - Only downloads changed pages using ETags
 - **Resume Support** - Continue interrupted downloads
 - **Framework Selection** - Download only what you need
+- **HIG Support** - Download Apple's Human Interface Guidelines
+- **Index Merging** - Run discovery incrementally without losing previous results
 
 ## Quick Start
 
@@ -179,6 +181,7 @@ apple-docs-offline/
 │   ├── 03_json_to_markdown.py # JSON → Markdown converter
 │   ├── 04_markdown_to_pdf.py  # Generate PDFs from Markdown
 │   ├── 05_markdown_to_html.py # Generate browsable HTML site
+│   ├── 06_discover_design.py  # HIG design resources crawler
 │   ├── update_check.py        # Check for updates (git fetch)
 │   ├── update_pull.py         # Download updates (git pull)
 │   ├── update_status.py       # Show status (git status)
@@ -238,8 +241,37 @@ The following frameworks are supported by default:
 | **coreml** | Core ML Framework |
 | **mapkit** | MapKit Framework |
 | **avfoundation** | AVFoundation Framework |
+| **avkit** | AVKit (Video Player UI) |
+| **tvservices** | TV Services (Top Shelf, TV Provider Auth) |
+| **tvuikit** | tvOS-specific UI Components |
+| **tvmlkit** | TVML Template-based Apps |
+| **mediaplayer** | Media Playback & Now Playing |
+| **gamecontroller** | Game & Remote Controller Input |
+| **coreimage** | Image Processing & Filters |
+| **quartzcore** | Core Animation |
+| **coregraphics** | 2D Drawing & Rendering |
+| **storekit** | In-App Purchases & Subscriptions |
+| **usernotifications** | Push & Local Notifications |
+| **symbols** | SF Symbols |
+| **accessibility** | Accessibility APIs |
 
 You can add more frameworks by editing `FRAMEWORK_ROOTS` in `scripts/01_discover_docs.py`.
+
+### Human Interface Guidelines (HIG)
+
+In addition to API documentation, you can also download Apple's Human Interface Guidelines using a dedicated script:
+
+```bash
+# Discover, download, and convert HIG in one command
+python scripts/06_discover_design.py --download --convert
+
+# Or step by step
+python scripts/06_discover_design.py           # Discover pages
+python scripts/06_discover_design.py --download # Download JSON
+python scripts/06_discover_design.py --convert  # Convert to Markdown
+```
+
+HIG pages are saved under `raw-json/hig/` and `markdown/hig/`. The script handles Apple's design documentation API which uses a different URL structure (`/tutorials/data/design/`) than the framework documentation.
 
 ## AI/LLM Integration
 
@@ -592,6 +624,9 @@ cat .docsync/changelog/*.md
 
 - [x] PDF generation (`04_markdown_to_pdf.py`) ✅
 - [x] HTML documentation website (`05_markdown_to_html.py`) ✅
+- [x] HIG / Design resources support (`06_discover_design.py`) ✅
+- [x] Additional frameworks (AVKit, TVServices, StoreKit, etc.) ✅
+- [x] Index merging (incremental discovery without data loss) ✅
 - [ ] Update history viewer (`update_history.py`)
 - [ ] Version rollback (`update_rollback.py`)
 - [ ] Swift Book integration

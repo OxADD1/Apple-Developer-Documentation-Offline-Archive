@@ -26,6 +26,19 @@ FRAMEWORK_ROOTS = {
     'coreml': 'https://developer.apple.com/tutorials/data/documentation/coreml.json',
     'mapkit': 'https://developer.apple.com/tutorials/data/documentation/mapkit.json',
     'avfoundation': 'https://developer.apple.com/tutorials/data/documentation/avfoundation.json',
+    'avkit': 'https://developer.apple.com/tutorials/data/documentation/avkit.json',
+    'tvservices': 'https://developer.apple.com/tutorials/data/documentation/tvservices.json',
+    'tvuikit': 'https://developer.apple.com/tutorials/data/documentation/tvuikit.json',
+    'tvmlkit': 'https://developer.apple.com/tutorials/data/documentation/tvmlkit.json',
+    'mediaplayer': 'https://developer.apple.com/tutorials/data/documentation/mediaplayer.json',
+    'gamecontroller': 'https://developer.apple.com/tutorials/data/documentation/gamecontroller.json',
+    'coreimage': 'https://developer.apple.com/tutorials/data/documentation/coreimage.json',
+    'quartzcore': 'https://developer.apple.com/tutorials/data/documentation/quartzcore.json',
+    'coregraphics': 'https://developer.apple.com/tutorials/data/documentation/coregraphics.json',
+    'storekit': 'https://developer.apple.com/tutorials/data/documentation/storekit.json',
+    'usernotifications': 'https://developer.apple.com/tutorials/data/documentation/usernotifications.json',
+    'symbols': 'https://developer.apple.com/tutorials/data/documentation/symbols.json',
+    'accessibility': 'https://developer.apple.com/tutorials/data/documentation/accessibility.json',
 }
 
 
@@ -280,23 +293,42 @@ class DocumentationCrawler:
         self.save_index()
 
     def save_index(self):
-        """Save complete discovered index"""
+        """Save complete discovered index, merging with existing data"""
         index_file = self.output_dir / 'index.json'
 
-        # Organize by framework
-        index = {
-            'frameworks': {},
-            'total_pages': len(self.discovered_urls),
-            'processed_pages': len(self.processed_urls),
-            'metadata': self.url_metadata,
-        }
+        # Load existing index to merge with
+        existing_index = {'frameworks': {}, 'metadata': {}}
+        if index_file.exists():
+            with open(index_file, 'r') as f:
+                existing_index = json.load(f)
 
-        # Group URLs by framework
+        # Group current URLs by framework
+        current_frameworks = {}
         for url in self.discovered_urls:
             framework = url.split('/')[0]
-            if framework not in index['frameworks']:
-                index['frameworks'][framework] = []
-            index['frameworks'][framework].append(url)
+            if framework not in current_frameworks:
+                current_frameworks[framework] = []
+            current_frameworks[framework].append(url)
+
+        # Merge: update existing frameworks with current, keep others intact
+        merged_frameworks = existing_index.get('frameworks', {})
+        merged_frameworks.update(current_frameworks)
+
+        # Merge metadata
+        merged_metadata = existing_index.get('metadata', {})
+        merged_metadata.update(self.url_metadata)
+
+        # Count totals across all frameworks
+        all_urls = set()
+        for urls in merged_frameworks.values():
+            all_urls.update(urls)
+
+        index = {
+            'frameworks': merged_frameworks,
+            'total_pages': len(all_urls),
+            'processed_pages': len(all_urls),
+            'metadata': merged_metadata,
+        }
 
         with open(index_file, 'w') as f:
             json.dump(index, f, indent=2)
