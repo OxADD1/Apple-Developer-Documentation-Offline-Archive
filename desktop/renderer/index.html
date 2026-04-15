@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apple Developer Documentation</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <div class="toolbar-left">
+      <div class="toolbar-drag-region"></div>
+      <button id="btn-back" class="toolbar-btn" title="Back (Cmd+[)" disabled>&#9664;</button>
+      <button id="btn-forward" class="toolbar-btn" title="Forward (Cmd+])" disabled>&#9654;</button>
+      <button id="btn-home" class="toolbar-btn" title="Home (Cmd+Shift+H)">&#8962;</button>
+    </div>
+    <div class="toolbar-center">
+      <input type="text" id="toolbar-search" placeholder="Search documentation (Cmd+K)" readonly>
+    </div>
+    <div class="toolbar-right">
+      <button id="btn-bookmark" class="toolbar-btn" title="Bookmark (Cmd+D)">&#9734;</button>
+      <button id="btn-theme" class="toolbar-btn" title="Toggle theme">&#9728;</button>
+      <button id="btn-font-down" class="toolbar-btn" title="Decrease font (Cmd+-)">A-</button>
+      <button id="btn-font-up" class="toolbar-btn" title="Increase font (Cmd+=)">A+</button>
+      <button id="btn-toc-toggle" class="toolbar-btn" title="Toggle TOC (Cmd+T)">&#9776;</button>
+    </div>
+  </div>
+
+  <!-- Main layout -->
+  <div id="main">
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div id="sidebar-tabs"></div>
+      <div id="sidebar-content"></div>
+    </div>
+
+    <!-- Resize handle -->
+    <div id="sidebar-resize"></div>
+
+    <!-- Content area -->
+    <div id="page-content"></div>
+
+    <!-- Table of contents -->
+    <div id="toc-panel">
+      <div id="toc-header">On This Page</div>
+      <div id="toc-content"></div>
+    </div>
+  </div>
+
+  <!-- Scripts — order matters -->
+  <script src="store.js"></script>
+  <script src="search.js"></script>
+  <script src="content.js"></script>
+  <script src="sidebar.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

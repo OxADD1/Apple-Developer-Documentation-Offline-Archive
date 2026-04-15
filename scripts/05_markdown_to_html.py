@@ -5,6 +5,7 @@ Creates a browsable, searchable HTML documentation site
 """
 
 import json
+import re
 from pathlib import Path
 from typing import List, Dict
 import argparse
@@ -443,13 +444,350 @@ class HTMLGenerator:
 
         <div class="stats">
             <strong>{len(frameworks)}</strong> Frameworks •
-            <strong>{total:,}</strong> Pages
+            <strong>{total:,}</strong> Pages •
+            <a href="search.html" style="color: #0071e3; text-decoration: none;">Search All</a>
         </div>
 
         <ul>
             {items_html}
         </ul>
     </div>
+</body>
+</html>
+"""
+
+    def strip_markdown(self, content: str) -> str:
+        """Strip markdown syntax to get plain text for search indexing"""
+        # Remove YAML frontmatter
+        if content.startswith('---'):
+            parts = content.split('---', 2)
+            if len(parts) >= 3:
+                content = parts[2]
+
+        # Remove code blocks
+        content = re.sub(r'```[\s\S]*?```', '', content)
+        content = re.sub(r'`[^`]+`', '', content)
+        # Remove headings markers
+        content = re.sub(r'^#{1,6}\s+', '', content, flags=re.MULTILINE)
+        # Remove bold/italic
+        content = re.sub(r'\*\*([^*]+)\*\*', r'\1', content)
+        content = re.sub(r'\*([^*]+)\*', r'\1', content)
+        # Remove links but keep text
+        content = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', content)
+        # Remove images
+        content = re.sub(r'!\[([^\]]*)\]\([^)]+\)', r'\1', content)
+        # Remove blockquote markers
+        content = re.sub(r'^>\s+', '', content, flags=re.MULTILINE)
+        # Remove list markers
+        content = re.sub(r'^[-*+]\s+', '', content, flags=re.MULTILINE)
+        content = re.sub(r'^\d+\.\s+', '', content, flags=re.MULTILINE)
+        # Collapse whitespace
+        content = re.sub(r'\n{2,}', '\n', content)
+        content = re.sub(r'  +', ' ', content)
+
+        return content.strip()
+
+    def build_search_entry(self, md_file: Path, framework: str) -> dict:
+        """Build a search index entry from a markdown file"""
+        try:
+            with open(md_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except IOError:
+            return None
+
+        # Extract title from YAML frontmatter or first heading
+        title = md_file.stem
+        if content.startswith('---'):
+            parts = content.split('---', 2)
+            if len(parts) >= 3:
+                for line in parts[1].splitlines():
+                    if line.strip().startswith('title:'):
+                        extracted = line.split(':', 1)[1].strip().strip('"').strip("'")
+                        if extracted:
+                            title = extracted
+                        break
+
+        # Get plain text snippet
+        plain = self.strip_markdown(content)
+        snippet = plain[:200].replace('"', '\\"') if plain else ''
+
+        # Get relative HTML path
+        framework_dir = self.markdown_dir / framework
+        rel_path = md_file.relative_to(framework_dir)
+        html_path = f'{framework}/{rel_path.with_suffix(".html")}'
+
+        return {
+            'title': title,
+            'path': html_path,
+            'framework': framework,
+            'snippet': snippet,
+        }
+
+    def build_search_indices(self, framework_stats: Dict[str, int]):
+        """Build search index JSON files for all frameworks"""
+        print("\nBuilding search indices...")
+
+        all_entries = []
+
+        for framework in sorted(framework_stats.keys()):
+            files = self.get_framework_files(framework)
+            framework_entries = []
+
+            for md_file in files:
+                entry = self.build_search_entry(md_file, framework)
+                if entry:
+                    framework_entries.append(entry)
+
+            # Per-framework index
+            fw_index_dir = self.html_dir / framework
+            fw_index_dir.mkdir(parents=True, exist_ok=True)
+            with open(fw_index_dir / 'search-index.json', 'w', encoding='utf-8') as f:
+                json.dump(framework_entries, f)
+
+            all_entries.extend(framework_entries)
+
+        # Global index
+        with open(self.html_dir / 'search-index.json', 'w', encoding='utf-8') as f:
+            json.dump(all_entries, f)
+
+        print(f"  Global index: {len(all_entries)} entries")
+        print(f"  Per-framework indices: {len(framework_stats)} files")
+
+    def generate_search_page(self, frameworks: Dict[str, int]) -> str:
+        """Generate the global search.html page"""
+        framework_options = '\n'.join(
+            f'<option value="{fw}">{fw} ({count})</option>'
+            for fw, count in sorted(frameworks.items())
+        )
+
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search - Apple Developer Documentation</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f7;
+            color: #333;
+        }}
+        .container {{
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }}
+        .header {{
+            text-align: center;
+            margin-bottom: 30px;
+        }}
+        .header h1 {{ font-size: 2em; margin-bottom: 5px; }}
+        .header .subtitle {{ color: #666; }}
+        .back-link {{
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #0071e3;
+            text-decoration: none;
+        }}
+        .back-link:hover {{ text-decoration: underline; }}
+        .search-box {{
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }}
+        .search-box input {{
+            flex: 1;
+            padding: 14px 16px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            outline: none;
+        }}
+        .search-box input:focus {{ border-color: #0071e3; }}
+        .search-box select {{
+            padding: 14px 12px;
+            font-size: 14px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            min-width: 150px;
+        }}
+        .stats {{
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }}
+        .results {{ list-style: none; }}
+        .result {{
+            background: white;
+            padding: 16px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            border: 1px solid #e5e5e5;
+        }}
+        .result:hover {{ border-color: #0071e3; }}
+        .result a {{
+            color: #0071e3;
+            text-decoration: none;
+            font-size: 1.1em;
+            font-weight: 500;
+        }}
+        .result a:hover {{ text-decoration: underline; }}
+        .result .badge {{
+            display: inline-block;
+            background: #f0f0f0;
+            color: #666;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 8px;
+        }}
+        .result .snippet {{
+            color: #555;
+            font-size: 14px;
+            margin-top: 6px;
+            line-height: 1.4;
+        }}
+        .result .snippet mark {{
+            background: #fff3cd;
+            padding: 0 2px;
+            border-radius: 2px;
+        }}
+        .no-results {{
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }}
+        .loading {{
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">&larr; Back to Home</a>
+        <div class="header">
+            <h1>Search Documentation</h1>
+            <div class="subtitle">Search across all frameworks</div>
+        </div>
+
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Search..." autofocus>
+            <select id="frameworkFilter">
+                <option value="">All Frameworks</option>
+                {framework_options}
+            </select>
+        </div>
+
+        <div id="stats" class="stats"></div>
+        <ul id="results" class="results">
+            <li class="loading">Loading search index...</li>
+        </ul>
+    </div>
+
+    <script>
+        let searchIndex = [];
+        let debounceTimer = null;
+
+        // Load search index
+        fetch('search-index.json')
+            .then(r => r.json())
+            .then(data => {{
+                searchIndex = data;
+                document.getElementById('results').innerHTML = '';
+                document.getElementById('stats').textContent =
+                    searchIndex.length.toLocaleString() + ' pages indexed';
+            }})
+            .catch(() => {{
+                document.getElementById('results').innerHTML =
+                    '<li class="no-results">Failed to load search index.</li>';
+            }});
+
+        function scoreEntry(entry, tokens) {{
+            let score = 0;
+            const titleLower = entry.title.toLowerCase();
+            const snippetLower = (entry.snippet || '').toLowerCase();
+            for (const token of tokens) {{
+                if (titleLower === token) score += 100;
+                else if (titleLower.startsWith(token)) score += 60;
+                else if (titleLower.includes(token)) score += 40;
+                if (snippetLower.includes(token)) score += 10;
+            }}
+            return score;
+        }}
+
+        function highlightText(text, tokens) {{
+            if (!text) return '';
+            let result = text;
+            for (const token of tokens) {{
+                const regex = new RegExp('(' + token.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&') + ')', 'gi');
+                result = result.replace(regex, '<mark>$1</mark>');
+            }}
+            return result;
+        }}
+
+        function doSearch() {{
+            const query = document.getElementById('searchInput').value.trim().toLowerCase();
+            const framework = document.getElementById('frameworkFilter').value;
+            const resultsEl = document.getElementById('results');
+            const statsEl = document.getElementById('stats');
+
+            if (!query) {{
+                resultsEl.innerHTML = '';
+                statsEl.textContent = searchIndex.length.toLocaleString() + ' pages indexed';
+                return;
+            }}
+
+            const tokens = query.split(/\\s+/).filter(t => t.length > 0);
+
+            let filtered = searchIndex;
+            if (framework) {{
+                filtered = filtered.filter(e => e.framework === framework);
+            }}
+
+            const scored = filtered
+                .map(entry => ({{ entry, score: scoreEntry(entry, tokens) }}))
+                .filter(x => x.score > 0)
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 50);
+
+            if (scored.length === 0) {{
+                resultsEl.innerHTML = '<li class="no-results">No results found.</li>';
+                statsEl.textContent = '0 results';
+                return;
+            }}
+
+            statsEl.textContent = scored.length + (scored.length === 50 ? '+' : '') + ' results';
+
+            resultsEl.innerHTML = scored.map(x => {{
+                const e = x.entry;
+                const title = highlightText(e.title, tokens);
+                const snippet = highlightText(e.snippet || '', tokens);
+                return '<li class="result">' +
+                    '<a href="' + e.path + '">' + title + '</a>' +
+                    '<span class="badge">' + e.framework + '</span>' +
+                    (snippet ? '<div class="snippet">' + snippet + '</div>' : '') +
+                    '</li>';
+            }}).join('');
+        }}
+
+        document.getElementById('searchInput').addEventListener('input', function() {{
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(doSearch, 200);
+        }});
+
+        document.getElementById('frameworkFilter').addEventListener('change', doSearch);
+
+        // Handle URL params
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('q')) {{
+            document.getElementById('searchInput').value = params.get('q');
+            setTimeout(doSearch, 500);
+        }}
+    </script>
 </body>
 </html>
 """
@@ -514,10 +852,19 @@ class HTMLGenerator:
         with open(main_index_file, 'w', encoding='utf-8') as f:
             f.write(main_index)
 
+        # Build search indices
+        self.build_search_indices(framework_stats)
+
+        # Generate search page
+        search_page = self.generate_search_page(framework_stats)
+        with open(self.html_dir / 'search.html', 'w', encoding='utf-8') as f:
+            f.write(search_page)
+
         print("\n" + "="*70)
         print("HTML Documentation Generated!")
         print("="*70)
         print(f"\nOpen: {main_index_file}")
+        print(f"Search: {self.html_dir / 'search.html'}")
         print(f"\nTotal frameworks: {len(framework_stats)}")
         print(f"Total pages: {sum(framework_stats.values()):,}")
 
