@@ -1,0 +1,56 @@
+{
+  "name": "apple-docs-desktop",
+  "version": "1.0.0",
+  "description": "Apple Developer Documentation - Offline Desktop Viewer",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.appledocs.offline",
+    "productName": "Apple Docs",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../markdown",
+        "to": "markdown",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../html/search-index.json",
+        "to": "search-index.json"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.0",
+    "marked": "^15.0.0",
+    "marked-highlight": "^2.2.4"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}

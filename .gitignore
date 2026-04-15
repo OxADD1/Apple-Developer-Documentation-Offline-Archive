@@ -27,8 +27,13 @@ raw-json/
 raw-docc/
 markdown/
 pdf/
+html/
 index.json
 discovery_state.json
+design_discovery_state.json
+design_index.json
+swift_book_discovery_state.json
+swift_book_index.json
 
 # Update System Metadata
 .docsync/

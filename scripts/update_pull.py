@@ -9,6 +9,7 @@ import aiohttp
 import json
 import hashlib
 import time
+import shutil
 from pathlib import Path
 from typing import Dict, List
 from tqdm import tqdm
@@ -42,16 +43,22 @@ class UpdatePuller:
         self.raw_json_dir = self.base_dir / 'raw-json'
         self.markdown_dir = self.base_dir / 'markdown'
         self.manifest_file = self.docsync_dir / 'manifest.json'
+        self.backup_dir = self.docsync_dir / 'backup'
+
+        # Timestamp for this run (used for backup directory naming)
+        self.run_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
         # State
         self.manifest: Dict = {}
         self.pages_to_update: List[Dict] = []
+        self.backed_up_entries: Dict = {}
 
         # Stats
         self.stats = {
             'downloaded': 0,
             'failed': 0,
             'converted': 0,
+            'backed_up': 0,
         }
 
         # Rate limiting
@@ -96,6 +103,62 @@ class UpdatePuller:
         """Calculate SHA256 hash of content"""
         return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
+    def create_backup(self, doc_path: str):
+        """Backup existing JSON and Markdown files before overwriting"""
+        backup_base = self.backup_dir / self.run_timestamp
+
+        # Backup JSON file
+        json_src = self.raw_json_dir / f'{doc_path}.json'
+        if json_src.exists():
+            json_dst = backup_base / 'raw-json' / f'{doc_path}.json'
+            json_dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(json_src, json_dst)
+
+        # Backup Markdown file
+        md_src = self.markdown_dir / f'{doc_path}.md'
+        if md_src.exists():
+            md_dst = backup_base / 'markdown' / f'{doc_path}.md'
+            md_dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(md_src, md_dst)
+
+        # Save old manifest entry
+        if doc_path in self.manifest:
+            self.backed_up_entries[doc_path] = self.manifest[doc_path].copy()
+
+        self.stats['backed_up'] += 1
+
+    def save_backup_metadata(self):
+        """Save backup metadata for rollback support"""
+        if not self.backed_up_entries:
+            return
+
+        backup_base = self.backup_dir / self.run_timestamp
+        backup_base.mkdir(parents=True, exist_ok=True)
+
+        # Save backed-up manifest entries
+        entries_file = backup_base / 'manifest_entries.json'
+        with open(entries_file, 'w') as f:
+            json.dump(self.backed_up_entries, f, indent=2)
+
+        # Save backup info
+        by_framework = {}
+        for doc_path in self.backed_up_entries:
+            framework = doc_path.split('/')[0]
+            by_framework[framework] = by_framework.get(framework, 0) + 1
+
+        info = {
+            'timestamp': datetime.now().isoformat(),
+            'pages_backed_up': len(self.backed_up_entries),
+            'frameworks_affected': by_framework,
+        }
+
+        info_file = backup_base / 'backup_info.json'
+        with open(info_file, 'w') as f:
+            json.dump(info, f, indent=2)
+
+        print(f"\nBackup saved to: {backup_base}")
+        print(f"  Pages backed up: {len(self.backed_up_entries)}")
+
     async def download_page(self, session: aiohttp.ClientSession, page_info: Dict) -> bool:
         """Download a single updated page"""
         await self.rate_limiter.wait()
@@ -109,6 +172,11 @@ class UpdatePuller:
                 if response.status == 200:
                     content = await response.text()
                     data = json.loads(content)
+
+                    # Backup existing files before overwriting
+                    existing_json = self.raw_json_dir / f'{doc_path}.json'
+                    if existing_json.exists():
+                        self.create_backup(doc_path)
 
                     # Save JSON file
                     output_file = self.raw_json_dir / f'{doc_path}.json'
@@ -293,6 +361,9 @@ async def main():
 
     # Pull updates
     await puller.pull_updates(frameworks=args.frameworks)
+
+    # Save backup metadata
+    puller.save_backup_metadata()
 
     # Convert to Markdown
     if not args.no_convert and puller.stats['downloaded'] > 0:

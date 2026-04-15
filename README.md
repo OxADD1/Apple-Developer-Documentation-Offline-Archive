@@ -176,16 +176,19 @@ python scripts/update_pull.py --no-convert
 ```
 apple-docs-offline/
 ├── scripts/
-│   ├── 01_discover_docs.py    # Recursive documentation crawler
-│   ├── 02_download_json.py    # JSON downloader with manifest
-│   ├── 03_json_to_markdown.py # JSON → Markdown converter
-│   ├── 04_markdown_to_pdf.py  # Generate PDFs from Markdown
-│   ├── 05_markdown_to_html.py # Generate browsable HTML site
-│   ├── 06_discover_design.py  # HIG design resources crawler
-│   ├── update_check.py        # Check for updates (git fetch)
-│   ├── update_pull.py         # Download updates (git pull)
-│   ├── update_status.py       # Show status (git status)
-│   └── requirements.txt       # Python dependencies
+│   ├── 01_discover_docs.py      # Recursive documentation crawler
+│   ├── 02_download_json.py      # JSON downloader with manifest
+│   ├── 03_json_to_markdown.py   # JSON → Markdown converter
+│   ├── 04_markdown_to_pdf.py    # Generate PDFs from Markdown
+│   ├── 05_markdown_to_html.py   # Generate browsable HTML site + search
+│   ├── 06_discover_design.py    # HIG design resources crawler
+│   ├── 07_discover_swift_book.py # Swift Programming Language book
+│   ├── update_check.py          # Check for updates (git fetch)
+│   ├── update_pull.py           # Download updates (git pull)
+│   ├── update_status.py         # Show status (git status)
+│   ├── update_history.py        # View update history (git log)
+│   ├── update_rollback.py       # Rollback to previous version (git revert)
+│   └── requirements.txt         # Python dependencies
 │
 ├── markdown/                  # AI-optimized Markdown
 │   ├── swift/
@@ -272,6 +275,22 @@ python scripts/06_discover_design.py --convert  # Convert to Markdown
 ```
 
 HIG pages are saved under `raw-json/hig/` and `markdown/hig/`. The script handles Apple's design documentation API which uses a different URL structure (`/tutorials/data/design/`) than the framework documentation.
+
+### The Swift Programming Language Book
+
+Download the official Swift Programming Language book from docs.swift.org:
+
+```bash
+# Discover, download, and convert in one command
+python scripts/07_discover_swift_book.py --download --convert
+
+# Or step by step
+python scripts/07_discover_swift_book.py           # Discover chapters
+python scripts/07_discover_swift_book.py --download # Download JSON
+python scripts/07_discover_swift_book.py --convert  # Convert to Markdown
+```
+
+Swift Book pages are saved under `raw-json/swift-book/` and `markdown/swift-book/`. The script crawls the DocC JSON API at docs.swift.org.
 
 ## AI/LLM Integration
 
@@ -393,9 +412,13 @@ python scripts/02_download_json.py --help
 python scripts/03_json_to_markdown.py --help
 python scripts/04_markdown_to_pdf.py --help
 python scripts/05_markdown_to_html.py --help
+python scripts/06_discover_design.py --help
+python scripts/07_discover_swift_book.py --help
 python scripts/update_check.py --help
 python scripts/update_pull.py --help
 python scripts/update_status.py --help
+python scripts/update_history.py --help
+python scripts/update_rollback.py --help
 ```
 
 ## Complete Documentation Archive
@@ -503,13 +526,51 @@ open html/index.html
 
 **HTML Features:**
 - ✅ Complete offline browsing
-- ✅ Search functionality per framework
+- ✅ Full-text search across all frameworks
+- ✅ Per-framework search filtering
 - ✅ Apple-style dark code highlighting
 - ✅ Responsive design
 - ✅ Fast navigation
 - ✅ No server required
 
 **Output:** `html/` directory with complete static website
+
+The HTML site includes a global search page (`html/search.html`) with:
+- Real-time search across all documentation pages
+- Framework filter dropdown
+- Scored results (title matches ranked higher than content matches)
+- Highlighted search terms in results
+
+### Desktop App (Electron)
+
+Browse documentation in a native desktop window:
+
+```bash
+# Install Electron
+cd desktop && npm install
+
+# Launch the app
+npm start
+```
+
+Build a distributable app:
+
+```bash
+# macOS .dmg
+npm run build:mac
+
+# Windows .exe
+npm run build:win
+
+# Linux .AppImage
+npm run build:linux
+```
+
+Features:
+- Native window with menu bar (File, Edit, View, Go)
+- Keyboard shortcuts: `Cmd+F` for search, `Cmd+H` for home, `Cmd+Left/Right` for back/forward
+- Zoom controls and fullscreen support
+- External links open in default browser
 
 ### Complete Archive Structure
 
@@ -547,15 +608,25 @@ Apple-Developer-Documentation-Offline-Archive/
 │   ├── versions/             # Version snapshots
 │   └── changelog/            # Update history
 │
+├── desktop/                  # Electron desktop app
+│   ├── main.js
+│   ├── package.json
+│   └── preload.js
+│
 └── scripts/                  # Python tools
     ├── 01_discover_docs.py
     ├── 02_download_json.py
     ├── 03_json_to_markdown.py
     ├── 04_markdown_to_pdf.py
     ├── 05_markdown_to_html.py
+    ├── 06_discover_design.py
+    ├── 07_discover_swift_book.py
+    ├── 08_desktop_app.py
     ├── update_check.py
     ├── update_pull.py
-    └── update_status.py
+    ├── update_status.py
+    ├── update_history.py
+    └── update_rollback.py
 ```
 
 ## How It Works
@@ -620,6 +691,41 @@ python scripts/update_pull.py
 cat .docsync/changelog/*.md
 ```
 
+### View Update History
+
+View a timeline of all documentation updates:
+
+```bash
+# Show all update history
+python scripts/update_history.py
+
+# Show last 5 updates
+python scripts/update_history.py --limit 5
+
+# Filter by framework
+python scripts/update_history.py --framework swiftui
+
+# Show detailed changelogs
+python scripts/update_history.py --detailed
+```
+
+### Rollback to Previous Version
+
+If an update introduces issues, roll back to a previous version:
+
+```bash
+# List available backups
+python scripts/update_rollback.py --list
+
+# Preview what would be restored
+python scripts/update_rollback.py --rollback 2026-04-15_12-00 --dry-run
+
+# Restore from backup
+python scripts/update_rollback.py --rollback 2026-04-15_12-00
+```
+
+Backups are created automatically when `update_pull.py` downloads updates. Each backup preserves the previous JSON and Markdown files so they can be restored.
+
 ## Future Features
 
 - [x] PDF generation (`04_markdown_to_pdf.py`) ✅
@@ -627,11 +733,11 @@ cat .docsync/changelog/*.md
 - [x] HIG / Design resources support (`06_discover_design.py`) ✅
 - [x] Additional frameworks (AVKit, TVServices, StoreKit, etc.) ✅
 - [x] Index merging (incremental discovery without data loss) ✅
-- [ ] Update history viewer (`update_history.py`)
-- [ ] Version rollback (`update_rollback.py`)
-- [ ] Swift Book integration
-- [ ] Full-text search index for HTML
-- [ ] Desktop app wrapper (Electron/Tauri)
+- [x] Update history viewer (`update_history.py`) ✅
+- [x] Version rollback (`update_rollback.py`) ✅
+- [x] Swift Book integration (`07_discover_swift_book.py`) ✅
+- [x] Full-text search index for HTML ✅
+- [x] Desktop app wrapper (Electron) ✅
 
 ## License & Disclaimer
 
@@ -660,6 +766,11 @@ Contributions welcome! Areas for improvement:
 3. Use `--help` flag for script-specific documentation
 4. Check existing issues
 
+## Contributors
+
+- [@OxADD1](https://github.com/OxADD1) - Creator
+- [@Hmz1hb](https://github.com/Hmz1hb) - HIG support, Swift Book integration, desktop app, search, update history/rollback, additional frameworks
+
 ## Credits
 
 Built with:
@@ -667,6 +778,9 @@ Built with:
 - [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) - HTML parsing
 - [tqdm](https://github.com/tqdm/tqdm) - Progress bars
 - [PyYAML](https://pyyaml.org/) - YAML processing
+- [Electron](https://www.electronjs.org/) - Desktop app framework
+- [marked](https://github.com/markedjs/marked) - Markdown parser
+- [highlight.js](https://highlightjs.org/) - Syntax highlighting
 
 ---
 
