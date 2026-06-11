@@ -26,6 +26,9 @@ FRAMEWORK_ROOTS = {
     'coreml': 'https://developer.apple.com/tutorials/data/documentation/coreml.json',
     'mapkit': 'https://developer.apple.com/tutorials/data/documentation/mapkit.json',
     'avfoundation': 'https://developer.apple.com/tutorials/data/documentation/avfoundation.json',
+    'foundationmodels': 'https://developer.apple.com/tutorials/data/documentation/foundationmodels.json',
+    'appintents': 'https://developer.apple.com/tutorials/data/documentation/appintents.json',
+    'sirikit': 'https://developer.apple.com/tutorials/data/documentation/sirikit.json',
 }
 
 
